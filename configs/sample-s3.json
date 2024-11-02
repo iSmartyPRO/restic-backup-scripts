@@ -1,0 +1,26 @@
+{
+    "ProjectName": "MyS3BackupProject",
+    "LogPath": "C:\\Backup\\logs\\BackupLog",
+    "BackupSource": "C:\\Data\\Source",
+    "ResticPath": "C:\\Tools\\restic.exe",
+    "Repository": "s3:s3.amazonaws.com/your-bucket-name",
+    "ResticPassword": "YourSecurePassword",
+    "AWSAccessKeyId": "your-access-key-id",
+    "AWSSecretAccessKey": "your-secret-access-key",
+    "UseFsSnapshot": true,
+    "RetentionPolicy": {
+        "KeepLast": 7,
+        "KeepDaily": 7,
+        "KeepWeekly": 4,
+        "KeepMonthly": 12,
+        "KeepYearly": 2
+    },
+    "EmailSettings": {
+        "SmtpServer": "smtp.example.com",
+        "SmtpPort": 587,
+        "SmtpUser": "user@example.com",
+        "SmtpPassword": "YourEmailPassword",
+        "From": "no-reply@example.com",
+        "To": "user@example.com"
+    }
+}

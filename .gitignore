@@ -1,5 +1,6 @@
 configs/*.json
-!configs/sample.json
+!configs/sample-sftp.json
+!configs/sample-s3.json
 logs/*.log
 scheduledScripts/*.ps1
 !scheduledScripts/task-projectName-sample.ps1

@@ -236,6 +236,147 @@ function Get-ResticSnapshots {
 }
 
 
+
+function Backup-ToS3 {
+    param (
+        [string]$ConfigPath = "C:\Path\To\backup-config.json" # Path to the configuration JSON file
+    )
+
+    # Check if the configuration file exists
+    if (-not (Test-Path -Path $ConfigPath)) {
+        Write-Host "Configuration file not found at path: $ConfigPath" -ForegroundColor Red
+        return
+    }
+
+    # Load configuration from the JSON file
+    $Config = Get-Content -Path $ConfigPath | ConvertFrom-Json
+
+    # Extract project name for logging purposes
+    $ProjectName = $Config.ProjectName
+
+    # Set up logging
+    $LogPath = $Config.LogPath
+    $Timestamp = (Get-Date).ToString("yyyyMMddHHmmss")
+    $LogFile = "$LogPath-$Timestamp.log"
+
+    # Create log directory if it doesn't exist
+    if (-not (Test-Path -Path (Split-Path -Path $LogFile -Parent))) {
+        New-Item -ItemType Directory -Path (Split-Path -Path $LogFile -Parent) | Out-Null
+    }
+
+    # Function for logging messages
+    function Log-Message {
+        param (
+            [string]$Message,
+            [string]$LogLevel = "INFO"
+        )
+        $Timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $LogEntry = "$Timestamp [$LogLevel] $ProjectName : $Message"
+        Add-Content -Path $LogFile -Value $LogEntry
+    }
+
+    # Start logging the backup process
+    Log-Message "Starting backup process using configuration file at $ConfigPath..."
+
+    # Start tracking time
+    $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    # Retrieve configuration parameters
+    $BackupSource = $Config.BackupSource
+    $ResticPath = $Config.ResticPath
+    $Repository = $Config.Repository
+    $ResticPassword = $Config.ResticPassword
+    $UseFsSnapshot = $Config.UseFsSnapshot
+    $RetentionPolicy = $Config.RetentionPolicy
+    $EmailSettings = $Config.EmailSettings
+
+    # Set environment variables for AWS
+    $Env:AWS_ACCESS_KEY_ID = $Config.AWSAccessKeyId
+    $Env:AWS_SECRET_ACCESS_KEY = $Config.AWSSecretAccessKey
+
+    # Set the environment variable for the Restic password
+    $Env:RESTIC_PASSWORD = $ResticPassword
+
+    # Build the backup command with optional --use-fs-snapshot
+    $BackupCommand = "$ResticPath -r $Repository backup $BackupSource"
+    if ($UseFsSnapshot) {
+        $BackupCommand += " --use-fs-snapshot"
+    }
+
+    # Execute the backup command
+    Log-Message "Starting backup of $BackupSource to S3 repository at $Repository..."
+    Log-Message "Executing command: $BackupCommand"
+    
+    $BackupOutput = Invoke-Expression $BackupCommand 2>&1 # Capture both output and error
+    Log-Message "Restic Output: $BackupOutput"
+
+    # Check the result and log accordingly
+    if ($LASTEXITCODE -eq 0) {
+        Log-Message "Backup completed successfully." "INFO"
+        $BackupStatus = "Success"
+    } else {
+        Log-Message "Backup failed. Please check the logs for more details." "ERROR"
+        $BackupStatus = "Failure"
+    }
+
+    # Build and execute the forget command for retention policy
+    if ($RetentionPolicy) {
+        $ForgetCommand = "$ResticPath -r $Repository forget --prune"
+        if ($RetentionPolicy.KeepLast) { $ForgetCommand += " --keep-last $($RetentionPolicy.KeepLast)" }
+        if ($RetentionPolicy.KeepDaily) { $ForgetCommand += " --keep-daily $($RetentionPolicy.KeepDaily)" }
+        if ($RetentionPolicy.KeepWeekly) { $ForgetCommand += " --keep-weekly $($RetentionPolicy.KeepWeekly)" }
+        if ($RetentionPolicy.KeepMonthly) { $ForgetCommand += " --keep-monthly $($RetentionPolicy.KeepMonthly)" }
+        if ($RetentionPolicy.KeepYearly) { $ForgetCommand += " --keep-yearly $($RetentionPolicy.KeepYearly)" }
+
+        Log-Message "Applying retention policy and pruning old backups..."
+        Log-Message "Executing command: $ForgetCommand"
+        
+        $ForgetOutput = Invoke-Expression $ForgetCommand 2>&1 # Capture both output and error
+        Log-Message "Forget Command Output: $ForgetOutput"
+
+        # Check the result of the forget command
+        if ($LASTEXITCODE -eq 0) {
+            Log-Message "Retention policy applied successfully." "INFO"
+        } else {
+            Log-Message "Failed to apply retention policy. Please check the logs for more details." "ERROR"
+        }
+    }
+
+    # Clean up environment variables for security
+    Remove-Item Env:AWS_ACCESS_KEY_ID
+    Remove-Item Env:AWS_SECRET_ACCESS_KEY
+    Remove-Item Env:RESTIC_PASSWORD
+
+    # Stop tracking time
+    $Stopwatch.Stop()
+    $Duration = $Stopwatch.Elapsed
+    Log-Message "Total duration of backup process: $($Duration.ToString())."
+
+    # Send email notification if enabled in configuration
+    if ($EmailSettings) {
+        $Subject = "$ProjectName Backup Status: $BackupStatus"
+        $Body = "Backup Process completed with status: $BackupStatus`nLog Path: $LogFile`nDuration: $($Duration.ToString())"
+        
+        $SmtpClient = New-Object System.Net.Mail.SmtpClient($EmailSettings.SmtpServer, $EmailSettings.SmtpPort)
+        $SmtpClient.EnableSsl = $true
+        $SmtpClient.Credentials = New-Object System.Net.NetworkCredential($EmailSettings.SmtpUser, $EmailSettings.SmtpPassword)
+
+        $MailMessage = New-Object System.Net.Mail.MailMessage
+        $MailMessage.From = $EmailSettings.From
+        $MailMessage.To.Add($EmailSettings.To)
+        $MailMessage.Subject = $Subject
+        $MailMessage.Body = $Body
+
+        try {
+            $SmtpClient.Send($MailMessage)
+            Log-Message "Email notification sent successfully." "INFO"
+        } catch {
+            Log-Message "Failed to send email notification: $_" "ERROR"
+        }
+    }
+}
+
+
 function Initialize-Repository {
     param (
         [string]$ConfigPath = "C:\Path\To\backup-config.json" # Путь к JSON-файлу конфигурации
