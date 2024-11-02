@@ -1,0 +1,5 @@
+configs/*.json
+!configs/sample.json
+logs/*.log
+scheduledScripts/*.ps1
+!scheduledScripts/task-projectName-sample.ps1

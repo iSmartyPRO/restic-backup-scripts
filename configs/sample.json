@@ -1,0 +1,25 @@
+{
+    "ProjectName": "ProjectName Folder Backup",
+    "BackupSource": "D:\\backup\\folder",
+    "ResticPath": "C:\\apps\\backupScripts\\bin\\restic_0.17.1_windows_amd64\\restic.exe",
+    "Repository": "sftp://sshHost:/backupFolder/projectName",
+    "ResticPassword": "SuperResticPassword",
+    "UseFsSnapshot": true,
+    "LogPath": "C:\\apps\\backupScripts\\logs\\projectName",
+    "RetentionPolicy": {
+        "KeepLast": 5,
+        "KeepDaily": 7,
+        "KeepWeekly": 4,
+        "KeepMonthly": 6,
+        "KeepYearly": 2
+    },
+    "EmailSettings": {
+        "SmtpServer": "smtp.mail.ru",
+        "SmtpPort": 587,
+        "SmtpUser": "backups@mail.ru",
+        "SmtpPassword": "smtpPasswordHere",
+        "From": "Backups Project Name <backups@mail.ru>",
+        "To": "admin@mail.ru",
+        "Subject": "Backup Status Notification"
+    }
+}
